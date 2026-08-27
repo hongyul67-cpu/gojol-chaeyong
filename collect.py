@@ -68,6 +68,17 @@ NCS_TO_TAGS = {
 }
 NCS_CODES = "R600015,R600019,R600020,R600014,R600016,R600023,R600009"
 
+# 정규직 R1010 / 무기계약직 R1030 / 청년인턴(채용형) R1070 만.
+# 기간제·촉탁 같은 비정규직(R1040)과 체험형 인턴(R1060)은 학생 취업처가 아니다.
+HIRE_TYPES = "R1010,R1030,R1070"
+
+# 며칠 전 공고까지 훑을지. 주 1회 도니 넉넉히 잡아도 겹칠 뿐 빠지지 않는다.
+LOOKBACK_DAYS = 60
+
+# 운전.운송 분류에는 미화·경비·조리·사감 같은 자리가 섞여 들어온다.
+# 우리 학생 대상이 아니므로 제목에 이런 말이 있으면 뺀다.
+SKIP_WORDS = ["미화", "경비원", "청소", "조리", "사감", "당직", "경비/", "경비)"]
+
 # NCS 대분류에는 '항공'도 '반도체'도 없다. 각각 기계·전기전자 아래 중분류라
 # 대분류만으로는 학과별로 갈라 보여줄 수가 없어서, 낱말로 세부 표시를 덧붙인다.
 # (계열 판별이 아니라 '이름표'용이라 조금 헐거워도 문제가 없다)
@@ -905,6 +916,8 @@ def api_fetch_all():
         log("오픈API 키 없음 — 스크래핑으로 진행합니다")
         return None
 
+    # 기간 제한이 없으면 지난 몇 년치가 통째로 딸려 온다(실제로 1,200건이 들어왔다).
+    since = (dt.date.today() - dt.timedelta(days=LOOKBACK_DAYS)).isoformat()
     recs, ok = {}, False
     for se, name in (("R2010", "신입"), ("R2030", "신입+경력")):
         page = 1
@@ -913,7 +926,10 @@ def api_fetch_all():
                 "acbgCondLst": "R7030",      # 고졸
                 "recrutSe": se,
                 "ncsCdLst": NCS_CODES,
+                "hireTypeLst": HIRE_TYPES,   # 정규직·무기계약직·채용형인턴만
                 "replmprYn": "N",            # 대체인력 제외
+                "ongoingYn": "Y",            # 아직 접수 중인 것만
+                "pbancBgngYmd": since,       # 최근 것만 (옛 공고가 쏟아지는 걸 막는다)
                 "numOfRows": 100,
                 "pageNo": page,
             })
@@ -1144,6 +1160,10 @@ def main():
         for i in new_ids:
             row = api_row(by_id[i], today)
             if not (set(row["직렬태그"].split(";")) & TARGET_TAGS):
+                dropped += 1
+                continue
+            blob = row.get("_제목", "") + " " + row.get("모집직렬_원문", "")
+            if any(w in blob for w in SKIP_WORDS):
                 dropped += 1
                 continue
             rows.append(row)
