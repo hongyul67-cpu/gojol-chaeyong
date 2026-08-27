@@ -27,6 +27,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from bs4 import BeautifulSoup
@@ -814,12 +815,92 @@ def save_history(hist):
 
 
 # ─────────────────────────── 본체 ───────────────────────────
+# ───────────────────── 공공데이터포털 오픈API 확인 ─────────────────────
+# 아직 수집에는 쓰지 않는다. 응답이 어떤 이름으로 오는지 알아내려고
+# 한 번만 불러 구조를 로그에 남기는 단계.
+#
+#   https://apis.data.go.kr/1051000/recruitment/list
+#   acbgCondLst 학력(고졸 R7030) / recrutSe 채용구분(신입 R2010)
+#   ncsCdLst NCS분류(기계 R600015, 전기.전자 R600019)
+#   replmprYn 대체인력여부 / resultType 응답형태
+#
+# ⚠ 로그 파일은 공개 저장소에 그대로 커밋된다. 인증키가 절대 로그에
+#   들어가지 않도록, 키가 붙은 주소는 어떤 경우에도 찍지 않는다.
+API_BASE = "https://apis.data.go.kr/1051000/recruitment"
+
+
+def _api_key():
+    """Encoding·Decoding 어느 형태로 넣어도 되게 맞춰 준다."""
+    key = (os.environ.get("ALIO_API_KEY") or "").strip()
+    if key and "%" in key:                 # Encoding 표기면 한 번 풀어 준다.
+        key = urllib.parse.unquote(key)    # (그래야 아래서 다시 인코딩할 때 이중 인코딩이 안 된다)
+    return key
+
+
+def api_probe():
+    """오픈API를 한 번 불러 응답 구조만 기록한다. 수집 동작은 바꾸지 않는다."""
+    key = _api_key()
+    if not key:
+        log("오픈API 키 없음 — 확인 건너뜀 (스크래핑으로 진행)")
+        return
+
+    params = {
+        "serviceKey": key,
+        "acbgCondLst": "R7030",             # 고졸
+        "recrutSe": "R2010",                # 신입
+        "ncsCdLst": "R600015,R600019",      # 기계 / 전기.전자
+        "replmprYn": "N",                   # 대체인력 제외
+        "numOfRows": 3,
+        "pageNo": 1,
+        "resultType": "json",
+    }
+    url = API_BASE + "/list?" + urllib.parse.urlencode(params)
+    log("오픈API 확인 호출 → /list (고졸·신입·기계/전기전자, 3건)")
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=40) as r:
+            raw = r.read().decode("utf-8", "ignore")
+    except Exception as e:                  # noqa: BLE001 - 주소를 찍으면 키가 새므로 종류만 남긴다
+        log("  오픈API 호출 실패: %s (키가 아직 반영 전이거나 형태가 다를 수 있습니다)"
+            % type(e).__name__)
+        return
+
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        log("  JSON 이 아님. 앞부분: %s" % re.sub(r"\s+", " ", raw)[:300])
+        return
+
+    def walk(node, path="", depth=0):
+        """레코드 목록을 찾아 그 안의 필드 이름을 알아낸다."""
+        if depth > 4:
+            return None
+        if isinstance(node, dict):
+            log("  %s{...} 키: %s" % (path, ", ".join(list(node.keys())[:20])))
+            for k, v in node.items():
+                found = walk(v, "%s%s." % (path, k), depth + 1)
+                if found:
+                    return found
+        elif isinstance(node, list) and node and isinstance(node[0], dict):
+            log("  %s[%d건] 레코드 필드:" % (path, len(node)))
+            for k in sorted(node[0].keys()):
+                val = re.sub(r"\s+", " ", str(node[0][k]))[:60]
+                log("      %-22s = %s" % (k, val))
+            return True
+        return None
+
+    if not walk(data):
+        log("  레코드 목록을 못 찾음. 응답 앞부분: %s" % re.sub(r"\s+", " ", raw)[:400])
+
+
 def main():
     today = dt.date.today().isoformat()
     run_dir = os.path.join(FILES_DIR, today)
     os.makedirs(run_dir, exist_ok=True)
     log("=" * 60)
     log("수집 시작")
+    api_probe()
 
     seen = {}
     if os.path.exists(STATE_PATH):
