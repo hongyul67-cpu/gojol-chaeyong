@@ -75,6 +75,13 @@ HIRE_TYPES = "R1010,R1030,R1070"
 # 며칠 전 공고까지 훑을지. 주 1회 도니 넉넉히 잡아도 겹칠 뿐 빠지지 않는다.
 LOOKBACK_DAYS = 60
 
+# 공개 주소. index.html 을 파일로 떼어 나눠 줘도 링크가 끊기지 않게
+# 첫 화면에서는 이 절대 주소를 쓴다.
+SITE_URL = "https://hongyul67-cpu.github.io/gojol-chaeyong/"
+
+# 오래된 주차 리포트·자료는 지운다. 지나간 공고가 쌓이면 오히려 헷갈린다.
+KEEP_DAYS = 365
+
 # 운전.운송 분류에는 미화·경비·조리·사감 같은 자리가 섞여 들어온다.
 # 우리 학생 대상이 아니므로 제목에 이런 말이 있으면 뺀다.
 SKIP_WORDS = ["미화", "경비원", "청소", "조리", "사감", "당직", "경비/", "경비)"]
@@ -711,7 +718,8 @@ table.sum td a:hover{text-decoration:underline}
     for label, href in (downloads or []):
         bar.append("<a class='btnlink' href='%s' download>⬇ %s</a>"
                    % (esc(href), esc(label)))
-    bar.append("<a class='btnlink' href='archive.html'>📁 지난 주차 보기</a>")
+    arc = (SITE_URL + "archive.html") if mode == "open" else "archive.html"
+    bar.append("<a class='btnlink' href='%s'>📁 지난 주차 보기</a>" % arc)
     bar.append("</div>")
     parts.append("".join(bar))
 
@@ -1076,6 +1084,43 @@ def api_row(rec, today):
     }
 
 
+def prune_old(today):
+    """1년 지난 주차 리포트와 자료 폴더를 지운다."""
+    limit = (dt.date.fromisoformat(today) - dt.timedelta(days=KEEP_DAYS)).isoformat()
+    gone = []
+    for f in sorted(os.listdir(DOCS_DIR)):
+        m = re.match(r"^(\d{4}-\d{2}-\d{2})", f)
+        if m and f.endswith(".html") and m.group(1) < limit:
+            try:
+                os.remove(os.path.join(DOCS_DIR, f))
+                gone.append(f)
+            except OSError:
+                pass
+    if os.path.isdir(FILES_DIR):
+        for d in sorted(os.listdir(FILES_DIR)):
+            full = os.path.join(FILES_DIR, d)
+            if os.path.isdir(full) and re.match(r"^\d{4}-\d{2}-\d{2}$", d) and d < limit:
+                shutil.rmtree(full, ignore_errors=True)
+                gone.append(d + "/")
+    if gone:
+        log("1년 지난 자료 %d개 정리: %s" % (len(gone), ", ".join(gone[:6])))
+    return len(gone)
+
+
+def prune_history(hist, today):
+    """접수마감이 1년 넘게 지난 공고는 이력에서도 뺀다."""
+    limit = (dt.date.fromisoformat(today) - dt.timedelta(days=KEEP_DAYS)).isoformat()
+    kept = []
+    for h in hist:
+        end = str(h.get("접수마감") or "")
+        if re.match(r"^\d{4}-\d{2}-\d{2}$", end) and end < limit:
+            continue
+        kept.append(h)
+    if len(kept) != len(hist):
+        log("이력에서 1년 지난 공고 %d건 정리 (남은 %d건)" % (len(hist) - len(kept), len(kept)))
+    return kept
+
+
 def write_open_index(hist, today):
     """누적 이력에서 아직 접수 중인 공고만 골라 첫 화면을 만든다.
 
@@ -1150,13 +1195,15 @@ def finish(rows, dropped, failed, all_ids, seen_idx, today, run_dir, n_new):
         h["제목"] = r.get("_제목", "")
         hist.append(h)
         added += 1
-    if added:
+    hist = prune_history(hist, today)
+    if added or len(hist) != len(load_history()):
         save_history(hist)
     log("누적 이력: %d건 추가 / 전체 %d건" % (added, len(hist)))
 
     # 그 주 신규는 날짜 파일로 남긴다(지우지 않는다).
     report = unique_path(os.path.join(DOCS_DIR, "%s.html" % today))
     write_report(rows, report, today, n_new, failed, downloads)
+    prune_old(today)
     write_archive_index()
     log("주간 리포트: docs/%s" % os.path.basename(report))
 
