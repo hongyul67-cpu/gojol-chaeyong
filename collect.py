@@ -172,7 +172,7 @@ def _fetch_powershell(url, timeout):
             pass
 
 
-def fetch(url, timeout=60, tries=3):
+def fetch(url, timeout=25, tries=2):
     """되는 방식으로 받아 UTF-8 텍스트를 돌려준다.
 
     잡알리오는 짧은 간격으로 연달아 부르면 406을 돌려주므로 몇 초 쉬고
@@ -891,7 +891,7 @@ def api_get(path, params):
     url = API_BASE + path + "?" + urllib.parse.urlencode(p)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA})
-        with urllib.request.urlopen(req, timeout=40) as r:
+        with urllib.request.urlopen(req, timeout=20) as r:
             return json.loads(r.read().decode("utf-8", "ignore"))
     except Exception as e:                  # noqa: BLE001 - 주소를 찍으면 키가 샌다
         log("  오픈API 호출 실패(%s): %s" % (path, type(e).__name__))
