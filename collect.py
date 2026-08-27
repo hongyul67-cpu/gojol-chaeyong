@@ -616,7 +616,8 @@ def tsv_of(rows):
     return "\n".join(lines)
 
 
-def write_report(rows, path, today, scanned, failed=None, downloads=None, mode="weekly"):
+def write_report(rows, path, today, scanned, failed=None, downloads=None,
+                 mode="weekly", closed=None):
     esc = lambda s: html.escape(str(s or ""))
     css = """body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;margin:24px;color:#111;background:#fff}
 h1{font-size:20px;margin:0 0 4px}.sub{color:#666;font-size:13px;margin-bottom:14px}
@@ -638,6 +639,12 @@ background:#111;color:#fff;border-radius:8px;cursor:pointer}
 .bar .btnlink{font-size:13px;padding:8px 16px;border:1px solid #111;background:#fff;
 color:#111;border-radius:8px;text-decoration:none;display:inline-block}
 .bar .btnlink:hover{background:#f3f4f6}
+.tabs{display:flex;gap:6px;border-bottom:2px solid #111;margin:0 0 4px}
+.tabs button{font-family:inherit;font-size:14px;font-weight:700;padding:9px 18px;
+border:1px solid #d1d5db;border-bottom:none;background:#f3f4f6;color:#6b7280;
+border-radius:9px 9px 0 0;cursor:pointer;position:relative;top:2px}
+.tabs button.on{background:#111;color:#fff;border-color:#111}
+.tabnote{color:#666;font-size:12.5px;margin:10px 0 0}
 .bar button:hover{opacity:.85}
 #tsv{width:100%;height:150px;font-family:Consolas,monospace;font-size:11px;
 border:1px solid #d1d5db;border-radius:8px;padding:8px;white-space:pre;overflow:auto}
@@ -651,7 +658,8 @@ table.sum td a{text-decoration:none;font-weight:700}
 table.sum td a:hover{text-decoration:underline}
 @media print{
  body{margin:0;font-size:11pt}
- .bar,#paste,.noprint{display:none !important}
+ .bar,#paste,.noprint,.tabs{display:none !important}
+ [hidden]{display:block !important}
  .card{break-inside:avoid;page-break-inside:avoid;border:1px solid #999}
  .warn{border:2px solid #000;background:#fff;color:#000}
  h3{break-after:avoid;page-break-after:avoid}
@@ -747,6 +755,14 @@ table.sum td a:hover{text-decoration:underline}
                              % (esc(r["공고링크"]), esc(r["공고링크"])))
             parts.append("</table></div>")
 
+    if mode == "open":
+        parts.append(
+            "<div class='tabs'>"
+            "<button class='tab on' onclick=\"showTab('open',this)\">지금 지원 가능 %d건</button>"
+            "<button class='tab' onclick=\"showTab('closed',this)\">최근 마감 %d건</button>"
+            "</div>" % (len(rows), len(closed or [])))
+    parts.append("<div id='tab-open'>")
+
     if ordered:
         parts.append("<h3>한눈에 보기</h3>"
                      "<p class='hint'>줄을 누르면 아래 상세 내용으로 바로 갑니다.</p>"
@@ -776,6 +792,39 @@ table.sum td a:hover{text-decoration:underline}
     if samu:
         parts.append("<h3 style='margin-top:26px'>상세 — 사무 (참고)</h3>")
         cards(samu)
+
+    parts.append("</div>")   # tab-open 끝
+
+    if mode == "open":
+        parts.append("<div id='tab-closed' hidden>")
+        parts.append("<p class='tabnote'>최근 한 달 안에 접수가 끝난 공고입니다. "
+                     "지금은 지원할 수 없지만, 해마다 비슷한 시기에 다시 뽑는 곳이 많습니다. "
+                     "내년을 준비한다면 어떤 자격증을 언제까지 따야 할지 가늠해 보세요.</p>")
+        if closed:
+            parts.append("<table class='sum'><tr><th>기관</th><th>계열</th><th>대상</th>"
+                         "<th>학교장추천</th><th>마감했던 날</th><th>공고</th></tr>")
+            for r in closed:
+                rec = r.get("학교장추천") or ""
+                link = r.get("공고링크") or r.get("관련서류") or ""
+                parts.append(
+                    "<tr><td>%s</td><td>%s</td><td>%s</td><td%s>%s</td><td>%s</td>"
+                    "<td>%s</td></tr>"
+                    % (esc(r.get("기관명") or ""),
+                       esc((r.get("직렬태그") or "").replace(";", " · ")),
+                       esc(r.get("대상") or ""),
+                       " class='d'" if rec == "필요" else "",
+                       ("🔴 필요" if rec == "필요" else esc(rec)),
+                       esc(str(r.get("접수마감") or "")),
+                       ("<a href='%s'>보기</a>" % esc(link)) if link else ""))
+            parts.append("</table>")
+        else:
+            parts.append("<div class='none'>최근 한 달 안에 마감된 공고가 없습니다.</div>")
+        parts.append("</div>")
+        parts.append("<script>function showTab(k,b){"
+                     "document.getElementById('tab-open').hidden=(k!=='open');"
+                     "document.getElementById('tab-closed').hidden=(k!=='closed');"
+                     "document.querySelectorAll('.tabs button').forEach(function(x){"
+                     "x.classList.remove('on')});b.classList.add('on');}</script>")
 
     if rows and mode != "open":
         parts.append(
@@ -1033,10 +1082,13 @@ def write_open_index(hist, today):
     주간 리포트는 '이번 주에 새로 뜬 것'이라, 수요일에 들어온 학생에게는
     지난주에 뜬 진행중 공고가 안 보인다. 상설 링크로 쓰려면 이 화면이 맞다.
     """
-    rows = []
+    month_ago = (dt.date.fromisoformat(today) - dt.timedelta(days=30)).isoformat()
+    rows, closed = [], []
     for h in hist:
-        end = h.get("접수마감") or ""
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(end)) or str(end) < today:
+        end = str(h.get("접수마감") or "")
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", end):
+            continue
+        if end < month_ago:                 # 한 달보다 오래된 마감은 안 보여준다
             continue
         r = dict(h)
         for c in DATE_COLS:
@@ -1047,12 +1099,13 @@ def write_open_index(hist, today):
         r["_idx"] = h.get("잡알리오idx") or ""
         r["_상세URL"] = h.get("관련서류") or ""
         r["비고"] = re.sub(r"🔵[^/]*/\s*", "", r.get("비고") or "")   # 교사용 표시는 뺀다
-        rows.append(r)
+        (rows if end >= today else closed).append(r)
 
     rows.sort(key=lambda r: (str(r.get("접수마감") or "9999"), r.get("기관명") or ""))
+    closed.sort(key=lambda r: str(r.get("접수마감") or ""), reverse=True)
     write_report(rows, os.path.join(DOCS_DIR, "index.html"), today,
-                 len(rows), None, None, mode="open")
-    log("첫 화면: 모집중 %d건 (docs/index.html)" % len(rows))
+                 len(rows), None, None, mode="open", closed=closed)
+    log("첫 화면: 모집중 %d건 / 최근 마감 %d건 (docs/index.html)" % (len(rows), len(closed)))
 
 
 def finish(rows, dropped, failed, all_ids, seen_idx, today, run_dir, n_new):

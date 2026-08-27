@@ -18,6 +18,12 @@ background:#111;color:#fff;border-radius:8px;cursor:pointer}
 .bar .btnlink{font-size:13px;padding:8px 16px;border:1px solid #111;background:#fff;
 color:#111;border-radius:8px;text-decoration:none;display:inline-block}
 .bar .btnlink:hover{background:#f3f4f6}
+.tabs{display:flex;gap:6px;border-bottom:2px solid #111;margin:0 0 4px}
+.tabs button{font-family:inherit;font-size:14px;font-weight:700;padding:9px 18px;
+border:1px solid #d1d5db;border-bottom:none;background:#f3f4f6;color:#6b7280;
+border-radius:9px 9px 0 0;cursor:pointer;position:relative;top:2px}
+.tabs button.on{background:#111;color:#fff;border-color:#111}
+.tabnote{color:#666;font-size:12.5px;margin:10px 0 0}
 .bar button:hover{opacity:.85}
 #tsv{width:100%;height:150px;font-family:Consolas,monospace;font-size:11px;
 border:1px solid #d1d5db;border-radius:8px;padding:8px;white-space:pre;overflow:auto}
@@ -31,7 +37,8 @@ table.sum td a{text-decoration:none;font-weight:700}
 table.sum td a:hover{text-decoration:underline}
 @media print{
  body{margin:0;font-size:11pt}
- .bar,#paste,.noprint{display:none !important}
+ .bar,#paste,.noprint,.tabs{display:none !important}
+ [hidden]{display:block !important}
  .card{break-inside:avoid;page-break-inside:avoid;border:1px solid #999}
  .warn{border:2px solid #000;background:#fff;color:#000}
  h3{break-after:avoid;page-break-after:avoid}
@@ -41,6 +48,8 @@ table.sum td a:hover{text-decoration:underline}
 <div class='sub'>2026-08-27 기준으로 <b>접수가 끝나지 않은 공고 5건</b>입니다. 마감이 가까운 순서로 놓았습니다.<br>매주 월요일 아침에 저절로 새로 고쳐집니다 — 이 주소만 기억해 두세요.</div>
 <div class='warn'><b>⚠️ 지원하기 전에 반드시 원문 공고를 확인하세요.</b><br>이 표는 공공기관 채용정보를 자동으로 모아 정리한 것입니다. <b>자격요건과 마감일이 실제 공고와 다를 수 있고, 공고가 중간에 바뀌거나 취소되기도 합니다.</b> 각 공고의 <b>‘지원’ 링크</b>를 눌러 기관 채용 사이트에서 직접 확인하세요.<br><b>🔴 ‘학교장추천 필요’ 표시가 있는 공고는 혼자 지원할 수 없습니다.</b> 학교의 추천 절차를 먼저 거쳐야 하니, 반드시 <b>담임선생님이나 취업지원부와 먼저 상담</b>하세요. 추천 마감이 원서접수보다 한 달 넘게 이른 경우가 있습니다.</div>
 <div class='bar'><button onclick='window.print()'>🖨 인쇄 / PDF로 저장</button><button class='ghost' onclick='copyTsv()'>📋 구글시트용으로 복사</button><a class='btnlink' href='archive.html'>📁 지난 주차 보기</a></div>
+<div class='tabs'><button class='tab on' onclick="showTab('open',this)">지금 지원 가능 5건</button><button class='tab' onclick="showTab('closed',this)">최근 마감 8건</button></div>
+<div id='tab-open'>
 <h3>한눈에 보기</h3><p class='hint'>줄을 누르면 아래 상세 내용으로 바로 갑니다.</p><table class='sum'><tr><th>#</th><th>기관</th><th>계열</th><th>대상</th><th>학교장추천</th><th>접수마감</th><th>상태</th></tr>
 <tr class='urgent'><td>1</td><td><a href='#c1'>한국석유공사</a></td><td>기계 · 전기 · 사무</td><td>공통</td><td>미표기</td><td>2026-08-28</td><td class='d'>D-1</td></tr>
 <tr class='urgent'><td>2</td><td><a href='#c2'>서울대학교병원</a></td><td>기계 · 시설 · 사무</td><td>공통</td><td>미표기</td><td>2026-09-02</td><td class='d'>D-6</td></tr>
@@ -105,3 +114,18 @@ table.sum td a:hover{text-decoration:underline}
 <tr><td class='k'>비고</td><td>학력요건: 학력무관,중졸이하,고졸,대졸(2~3년),대졸(4년),석사,박사 (고졸 지원 가능, 타 학력과 병행 선발) / 근무지: 충남,경북,경남 / 응시자격: [공통 지원자격] 1. 국립생태원 「인사규정」제16조의 결격사유가 없는 자 2. 임용예정일 기준 직군별 정년에 도달하지 아니한 자 - 연구직, 관리직, 연구·관리전문직 정년 : 만 61세 - 경비, 청소 직군 정년 : 만 65세 3. 채용 확정 후 즉시 근무가 가능한 자 4. 남성의 경우, 병역필 또는 면제자 ※ 단, 고</td></tr>
 <tr><td class='k'>지원</td><td><a href='https://nie.careeron.co.kr/#/'>https://nie.careeron.co.kr/#/</a></td></tr>
 </table></div>
+</div>
+<div id='tab-closed' hidden>
+<p class='tabnote'>최근 한 달 안에 접수가 끝난 공고입니다. 지금은 지원할 수 없지만, 해마다 비슷한 시기에 다시 뽑는 곳이 많습니다. 내년을 준비한다면 어떤 자격증을 언제까지 따야 할지 가늠해 보세요.</p>
+<table class='sum'><tr><th>기관</th><th>계열</th><th>대상</th><th>학교장추천</th><th>마감했던 날</th><th>공고</th></tr>
+<tr><td>한국광해광업공단</td><td>시설 · 사무</td><td>재학생</td><td>미표기</td><td>2026-08-24</td><td><a href='https://komir.saramin.co.kr'>보기</a></td></tr>
+<tr><td>한국산업안전보건공단</td><td>기계 · 전기 · 시설 · 사무</td><td>공통</td><td>미표기</td><td>2026-08-24</td><td><a href='https://kosha.or.kr/notification/jobncontract/job/jobdata?bbsId=B2025021400005&amp;pstNo=202608060856579OQYZ6'>보기</a></td></tr>
+<tr><td>한국철도공사</td><td>기계 · 전기 · 전자 · 시설 · 사무</td><td>공통</td><td class='d'>🔴 필요</td><td>2026-08-21</td><td><a href='https://info.korail.com'>보기</a></td></tr>
+<tr><td>한국남동발전(주)</td><td>기계 · 전기</td><td>공통</td><td>미표기</td><td>2026-08-18</td><td><a href='https://koenergy.saramin.co.kr'>보기</a></td></tr>
+<tr><td>한국가스공사</td><td>기계 · 전기 · 시설</td><td>확인필요</td><td>미표기</td><td>2026-08-14</td><td><a href='https://www.kogas.or.kr'>보기</a></td></tr>
+<tr><td>한국산업인력공단</td><td>시설 · 사무</td><td>공통</td><td>미표기</td><td>2026-08-13</td><td><a href='https://www.hrdkorea.or.kr/3/1/2/2'>보기</a></td></tr>
+<tr><td>한국수력원자력(주)</td><td>기계 · 전기 · 전자</td><td>재학생</td><td>미표기</td><td>2026-08-07</td><td><a href='https://www.khnp.co.kr/recruit'>보기</a></td></tr>
+<tr><td>한국수력원자력(주)</td><td>기계 · 전기 · 전자 · 시설 · 사무</td><td>확인필요</td><td>미표기</td><td>2026-08-06</td><td><a href='https://www.khnp.co.kr/recruit'>보기</a></td></tr>
+</table>
+</div>
+<script>function showTab(k,b){document.getElementById('tab-open').hidden=(k!=='open');document.getElementById('tab-closed').hidden=(k!=='closed');document.querySelectorAll('.tabs button').forEach(function(x){x.classList.remove('on')});b.classList.add('on');}</script>

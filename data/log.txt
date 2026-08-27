@@ -1295,19 +1295,4 @@
 [2026-08-27 06:21:05] 주간 리포트: docs/2026-08-27(사본4).html
 [2026-08-27 06:21:05] 첫 화면: 모집중 5건 (docs/index.html)
 [2026-08-27 06:21:05] 완료 — 누적 1278건 기억
-[2026-08-27 06:24:15] ============================================================
-[2026-08-27 06:24:15] 수집 시작
-[2026-08-27 06:24:36]   오픈API 호출 실패(/list): URLError
-[2026-08-27 06:24:56]   오픈API 호출 실패(/list): URLError
-[2026-08-27 06:24:56] 오픈API를 쓰지 못했습니다 — 스크래핑으로 되돌립니다
-[2026-08-27 06:25:49]   내려받기 실패(2회 시도) https://job.alio.go.kr/recruit.do?pageNo=1&pageSet=50&education=R7030&eduType=single&career=R2010 :: URLError: <urlopen error timed out>
-[2026-08-27 06:26:43]   내려받기 실패(2회 시도) https://job.alio.go.kr/recruit.do?pageNo=1&pageSet=50&education=R7030&eduType=single&career=R2030 :: URLError: <urlopen error timed out>
-[2026-08-27 06:27:36]   내려받기 실패(2회 시도) https://job.alio.go.kr/recruit.do?pageNo=1&pageSet=50&education=R7030&eduType=multi&career=R2010 :: URLError: <urlopen error timed out>
-[2026-08-27 06:28:30]   내려받기 실패(2회 시도) https://job.alio.go.kr/recruit.do?pageNo=1&pageSet=50&education=R7030&eduType=multi&career=R2030 :: URLError: <urlopen error timed out>
-[2026-08-27 06:28:30] 목록 0건 확인, 기존 84건
-[2026-08-27 06:28:30] 새 공고 0건
-[2026-08-27 06:28:30] 핵심계열 0건 / 사무 0건 / 제외 0건
-[2026-08-27 06:28:30] 누적 이력: 0건 추가 / 전체 15건
-[2026-08-27 06:28:30] 주간 리포트: docs/2026-08-27(사본3).html
-[2026-08-27 06:28:30] 첫 화면: 모집중 5건 (docs/index.html)
-[2026-08-27 06:28:30] 완료 — 누적 84건 기억
+[2026-08-27 15:32:43] 첫 화면: 모집중 5건 / 최근 마감 8건 (docs/index.html)
