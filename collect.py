@@ -53,10 +53,31 @@ TAG_KEYWORDS = {
     "사무": ["사무", "경영", "회계", "행정", "총무", "인사"],
 }
 
-# 핵심 계열 — 우리 학교 학과와 이어지는 공업 계열. 하나라도 걸리면 담는다.
-CORE_TAGS = {"기계", "전기", "전자", "용접", "시설"}
-CORE_LABEL = "기계 · 전기 · 전자 · 용접 · 시설"
-# 사무 계열도 담을지. False면 위의 공업 계열만 남는다.
+# ── 계열 판별 ──────────────────────────────────────────────────
+# 예전에는 공고 글자에서 '기계','설비' 같은 낱말을 찾아 계열을 추측했다.
+# 그러다 '무기계약직' 안의 '기계'에 걸려 병동 업무직이 기계직으로 잡히곤 했다.
+# 이제는 오픈API가 주는 NCS 대분류를 그대로 쓴다. 추측이 아니라 사실이다.
+NCS_TO_TAGS = {
+    "기계":              ["기계"],      # 항공기 제작·정비도 여기 들어간다
+    "전기.전자":         ["전기", "전자"],   # 반도체도 여기 들어간다
+    "정보통신":          ["전자"],
+    "건설":              ["시설"],
+    "재료":              ["용접"],      # 금속재료·용접
+    "환경.에너지.안전":  ["시설"],
+    "운전.운송":         ["기계"],
+}
+NCS_CODES = "R600015,R600019,R600020,R600014,R600016,R600023,R600009"
+
+# NCS 대분류에는 '항공'도 '반도체'도 없다. 각각 기계·전기전자 아래 중분류라
+# 대분류만으로는 학과별로 갈라 보여줄 수가 없어서, 낱말로 세부 표시를 덧붙인다.
+# (계열 판별이 아니라 '이름표'용이라 조금 헐거워도 문제가 없다)
+EXTRA_TAGS = {
+    "항공드론": ["항공", "드론", "무인기", "무인항공", "UAM", "비행", "관제"],
+    "반도체":   ["반도체", "웨이퍼", "포토", "식각", "증착", "패키징", "클린룸", "팹"],
+}
+
+CORE_TAGS = {"기계", "전기", "전자", "용접", "시설", "항공드론", "반도체"}
+CORE_LABEL = "기계 · 전기 · 전자 · 용접 · 시설 · 항공드론 · 반도체"
 INCLUDE_SAMU = False
 TARGET_TAGS = CORE_TAGS | ({"사무"} if INCLUDE_SAMU else set())
 
@@ -94,7 +115,7 @@ DATA_DIR = os.path.join(BASE, "data")            # 실행 상태(사람이 볼 �
 OUT_DIR = FILES_DIR
 
 # 지금까지 수집한 것을 모두 모아두는 누적 파일
-HIST_COLS = COLS + ["잡알리오idx"]
+HIST_COLS = COLS + ["잡알리오idx", "제목"]
 HIST_CSV = os.path.join(BASE, "data", "history.csv")
 HIST_XLSX = os.path.join(FILES_DIR, "수집이력_전체.xlsx")
 DATE_COLS = ("추천마감", "접수시작", "접수마감", "필기일", "면접일", "최종발표")
@@ -584,7 +605,7 @@ def tsv_of(rows):
     return "\n".join(lines)
 
 
-def write_report(rows, path, today, scanned, failed=None, downloads=None):
+def write_report(rows, path, today, scanned, failed=None, downloads=None, mode="weekly"):
     esc = lambda s: html.escape(str(s or ""))
     css = """body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;margin:24px;color:#111;background:#fff}
 h1{font-size:20px;margin:0 0 4px}.sub{color:#666;font-size:13px;margin-bottom:14px}
@@ -628,20 +649,42 @@ table.sum td a:hover{text-decoration:underline}
     core = [r for r in rows if set(r["직렬태그"].split(";")) & CORE_TAGS]
     samu = [r for r in rows if r not in core]
 
-    parts = ["<meta charset='utf-8'><title>잡알리오 주간 수집 %s</title><style>%s</style>" % (today, css)]
-    parts.append("<h1>잡알리오 주간 수집 — %s</h1>" % today)
-    parts.append("<div class='sub'>새로 올라온 고졸·신입 공고 %d건을 확인해 "
-                 "<b>%s %d건</b>, 사무 %d건을 찾았습니다.</div>"
-                 % (scanned, CORE_LABEL, len(core), len(samu)))
+    if mode == "open":
+        head = "지금 지원할 수 있는 공고"
+        sub = ("%s 기준으로 <b>접수가 끝나지 않은 공고 %d건</b>입니다. "
+               "마감이 가까운 순서로 놓았습니다.<br>"
+               "매주 월요일 아침에 저절로 새로 고쳐집니다 — 이 주소만 기억해 두세요."
+               % (today, len(rows)))
+    else:
+        head = "이번 주 새로 올라온 공고"
+        sub = ("%s · 새로 올라온 고졸·신입 공고 %d건을 확인해 "
+               "<b>%s %d건</b>, 사무 %d건을 찾았습니다."
+               % (today, scanned, CORE_LABEL, len(core), len(samu)))
+    parts = ["<meta charset='utf-8'><title>%s</title><style>%s</style>" % (head, css)]
+    parts.append("<h1>%s</h1>" % head)
+    parts.append("<div class='sub'>%s</div>" % sub)
 
-    parts.append(
-        "<div class='warn'><b>⚠️ 반드시 원문 공고를 직접 확인하세요.</b><br>"
-        "이 표는 잡알리오 요약을 자동으로 긁어 정리한 것입니다. "
-        "특히 <b>대상(재학생/졸업생)</b>과 <b>학교장추천</b>은 공고 문구로 <b>추정한 값</b>이며, "
-        "<b>학교장 추천 마감일·제출 서류·세부 자격요건은 잡알리오에 실려 있지 않습니다.</b><br>"
-        "학생에게 안내하거나 추천 절차를 진행하기 전에, 각 카드의 <b>‘지원’ 링크</b>로 "
-        "기관 채용 사이트의 원문 공고문을 반드시 열어 확인해 주세요. "
-        "추천 마감이 원서접수보다 한 달 넘게 앞서는 경우가 있습니다.</div>")
+    if mode == "open":
+        # 학생·학부모가 보는 화면
+        parts.append(
+            "<div class='warn'><b>⚠️ 지원하기 전에 반드시 원문 공고를 확인하세요.</b><br>"
+            "이 표는 공공기관 채용정보를 자동으로 모아 정리한 것입니다. "
+            "<b>자격요건과 마감일이 실제 공고와 다를 수 있고, 공고가 중간에 바뀌거나 "
+            "취소되기도 합니다.</b> 각 공고의 <b>‘지원’ 링크</b>를 눌러 기관 채용 사이트에서 "
+            "직접 확인하세요.<br>"
+            "<b>🔴 ‘학교장추천 필요’ 표시가 있는 공고는 혼자 지원할 수 없습니다.</b> "
+            "학교의 추천 절차를 먼저 거쳐야 하니, 반드시 <b>담임선생님이나 취업지원부와 "
+            "먼저 상담</b>하세요. 추천 마감이 원서접수보다 한 달 넘게 이른 경우가 있습니다.</div>")
+    else:
+        # 선생님이 보는 주간 보고 화면
+        parts.append(
+            "<div class='warn'><b>⚠️ 반드시 원문 공고를 직접 확인하세요.</b><br>"
+            "이 표는 공공기관 채용정보 요약을 자동으로 정리한 것입니다. "
+            "특히 <b>대상(재학생/졸업생)</b>과 <b>학교장추천</b>은 공고 문구로 <b>추정한 값</b>이며, "
+            "<b>학교장 추천 마감일·제출 서류·세부 자격요건은 원자료에 실려 있지 않습니다.</b><br>"
+            "학생에게 안내하거나 추천 절차를 진행하기 전에, 각 카드의 <b>‘지원’ 링크</b>로 "
+            "기관 채용 사이트의 원문 공고문을 반드시 열어 확인해 주세요. "
+            "추천 마감이 원서접수보다 한 달 넘게 앞서는 경우가 있습니다.</div>")
 
     bar = ["<div class='bar'>",
            "<button onclick='window.print()'>🖨 인쇄 / PDF로 저장</button>",
@@ -723,7 +766,7 @@ table.sum td a:hover{text-decoration:underline}
         parts.append("<h3 style='margin-top:26px'>상세 — 사무 (참고)</h3>")
         cards(samu)
 
-    if rows:
+    if rows and mode != "open":
         parts.append(
             "<div id='paste'><h3>구글시트에 붙여넣기</h3>"
             "<p class='hint'>위의 <b>📋 구글시트용으로 복사</b>를 누른 뒤, 구글시트 "
@@ -837,61 +880,240 @@ def _api_key():
     return key
 
 
-def api_probe():
-    """오픈API를 한 번 불러 응답 구조만 기록한다. 수집 동작은 바꾸지 않는다."""
+def api_get(path, params):
+    """오픈API 호출. 인증키가 붙은 주소는 절대 로그에 남기지 않는다."""
     key = _api_key()
     if not key:
-        log("오픈API 키 없음 — 확인 건너뜀 (스크래핑으로 진행)")
-        return
-
-    params = {
-        "serviceKey": key,
-        "acbgCondLst": "R7030",             # 고졸
-        "recrutSe": "R2010",                # 신입
-        "ncsCdLst": "R600015,R600019",      # 기계 / 전기.전자
-        "replmprYn": "N",                   # 대체인력 제외
-        "numOfRows": 3,
-        "pageNo": 1,
-        "resultType": "json",
-    }
-    url = API_BASE + "/list?" + urllib.parse.urlencode(params)
-    log("오픈API 확인 호출 → /list (고졸·신입·기계/전기전자, 3건)")
-
+        return None
+    p = dict(params)
+    p["serviceKey"] = key
+    p.setdefault("resultType", "json")
+    url = API_BASE + path + "?" + urllib.parse.urlencode(p)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=40) as r:
-            raw = r.read().decode("utf-8", "ignore")
-    except Exception as e:                  # noqa: BLE001 - 주소를 찍으면 키가 새므로 종류만 남긴다
-        log("  오픈API 호출 실패: %s (키가 아직 반영 전이거나 형태가 다를 수 있습니다)"
-            % type(e).__name__)
-        return
-
-    try:
-        data = json.loads(raw)
-    except ValueError:
-        log("  JSON 이 아님. 앞부분: %s" % re.sub(r"\s+", " ", raw)[:300])
-        return
-
-    def walk(node, path="", depth=0):
-        """레코드 목록을 찾아 그 안의 필드 이름을 알아낸다."""
-        if depth > 4:
-            return None
-        if isinstance(node, dict):
-            log("  %s{...} 키: %s" % (path, ", ".join(list(node.keys())[:20])))
-            for k, v in node.items():
-                found = walk(v, "%s%s." % (path, k), depth + 1)
-                if found:
-                    return found
-        elif isinstance(node, list) and node and isinstance(node[0], dict):
-            log("  %s[%d건] 레코드 필드:" % (path, len(node)))
-            for k in sorted(node[0].keys()):
-                val = re.sub(r"\s+", " ", str(node[0][k]))[:60]
-                log("      %-22s = %s" % (k, val))
-            return True
+            return json.loads(r.read().decode("utf-8", "ignore"))
+    except Exception as e:                  # noqa: BLE001 - 주소를 찍으면 키가 샌다
+        log("  오픈API 호출 실패(%s): %s" % (path, type(e).__name__))
         return None
 
-    if not walk(data):
-        log("  레코드 목록을 못 찾음. 응답 앞부분: %s" % re.sub(r"\s+", " ", raw)[:400])
+
+def api_fetch_all():
+    """고졸·신입 공고를 오픈API로 모아 온다. 못 쓰면 None(→ 스크래핑으로)."""
+    key = _api_key()
+    if not key:
+        log("오픈API 키 없음 — 스크래핑으로 진행합니다")
+        return None
+
+    recs, ok = {}, False
+    for se, name in (("R2010", "신입"), ("R2030", "신입+경력")):
+        page = 1
+        while page <= 20:
+            data = api_get("/list", {
+                "acbgCondLst": "R7030",      # 고졸
+                "recrutSe": se,
+                "ncsCdLst": NCS_CODES,
+                "replmprYn": "N",            # 대체인력 제외
+                "numOfRows": 100,
+                "pageNo": page,
+            })
+            if data is None:
+                break
+            if str(data.get("resultCode")) not in ("200", "0", "00"):
+                log("  오픈API 오류 %s: %s"
+                    % (data.get("resultCode"), str(data.get("resultMsg"))[:80]))
+                break
+            batch = data.get("result") or []
+            for r in batch:
+                recs[str(r.get("recrutPblntSn"))] = r
+            total = int(data.get("totalCount") or 0)
+            ok = True
+            log("  API %s p%d → %d건 (전체 %d)" % (name, page, len(batch), total))
+            if not batch or len(recs) >= total:
+                break
+            page += 1
+
+    if not ok:
+        log("오픈API를 쓰지 못했습니다 — 스크래핑으로 되돌립니다")
+        return None
+    return list(recs.values())
+
+
+def api_tags(rec):
+    """NCS 대분류로 계열을 정하고, 낱말로 세부 이름표를 덧붙인다."""
+    tags = []
+    for nm in (rec.get("ncsCdNmLst") or "").split(","):
+        tags.extend(NCS_TO_TAGS.get(nm.strip(), []))
+    blob = " ".join([rec.get("recrutPbancTtl") or "", rec.get("ncsCdNmLst") or "",
+                     rec.get("aplyQlfcCn") or "", rec.get("prefCondCn") or ""])
+    for tag, words in EXTRA_TAGS.items():
+        if any(w in blob for w in words):
+            tags.append(tag)
+    return ";".join(dict.fromkeys(tags)) or "기타"
+
+
+def _ymd(s):
+    """'20260908' → date"""
+    s = re.sub(r"[^0-9]", "", str(s or ""))
+    if len(s) != 8:
+        return ""
+    try:
+        return dt.date(int(s[:4]), int(s[4:6]), int(s[6:]))
+    except ValueError:
+        return ""
+
+
+def api_row(rec, today):
+    """오픈API 레코드 → 구글시트와 같은 24열 한 줄."""
+    detail = {
+        "_응시자격": rec.get("aplyQlfcCn") or "",
+        "_우대내용": " ".join([rec.get("prefCn") or "", rec.get("prefCondCn") or ""]),
+        "_전형절차": rec.get("scrnprcdrMthdExpln") or "",
+    }
+    대상 = guess_target(detail)
+    추천, 근거 = detect_recommendation(detail)
+    학력 = rec.get("acbgCondNmLst") or ""
+    idx = str(rec.get("recrutPblntSn"))
+
+    비고 = ["🔵 잡알리오 신규 — 시트 반영 검토 필요"]
+    if 추천 == "필요":
+        비고.append("⚠️ 학교장 추천: " + 근거[:200])
+    if 학력:
+        비고.append("학력요건: %s%s"
+                    % (학력, "" if 학력.strip() == "고졸" else " (고졸 지원 가능, 타 학력과 병행 선발)"))
+    if rec.get("workRgnNmLst"):
+        비고.append("근무지: " + rec["workRgnNmLst"])
+    if detail["_응시자격"]:
+        비고.append("응시자격: " + re.sub(r"\s+", " ", detail["_응시자격"])[:180])
+
+    상세 = VIEW_URL.format(idx=idx)
+    return {
+        "순번": "", "구분": "확인필요",
+        "기관명": rec.get("instNm") or "",
+        "채용유형": rec.get("hireTypeNmLst") or "",
+        "직렬태그": api_tags(rec),
+        "모집직렬_원문": rec.get("ncsCdNmLst") or "",
+        "인원": rec.get("recrutNope") or "",
+        "대상": 대상, "학교장추천": 추천, "추천마감": "",
+        "접수시작": _ymd(rec.get("pbancBgngYmd")),
+        "접수마감": _ymd(rec.get("pbancEndYmd")),
+        "상태": "", "필기일": "", "면접일": "", "최종발표": "",
+        "전형절차": re.sub(r"\s+", " ", detail["_전형절차"])[:600],
+        "필기과목": "",
+        "가점·자격": re.sub(r"\s+", " ", detail["_우대내용"]).strip()[:600],
+        "성적요건": "",
+        "공고링크": rec.get("srcUrl") or 상세,
+        "관련서류": 상세,
+        "출처": "공공데이터 오픈API(%s 수집)" % today,
+        "비고": " / ".join(비고),
+        "_제목": rec.get("recrutPbancTtl") or "",
+        "_idx": idx, "_상세URL": 상세, "_학력": 학력,
+    }
+
+
+def write_open_index(hist, today):
+    """누적 이력에서 아직 접수 중인 공고만 골라 첫 화면을 만든다.
+
+    주간 리포트는 '이번 주에 새로 뜬 것'이라, 수요일에 들어온 학생에게는
+    지난주에 뜬 진행중 공고가 안 보인다. 상설 링크로 쓰려면 이 화면이 맞다.
+    """
+    rows = []
+    for h in hist:
+        end = h.get("접수마감") or ""
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(end)) or str(end) < today:
+            continue
+        r = dict(h)
+        for c in DATE_COLS:
+            v = r.get(c)
+            if isinstance(v, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+                r[c] = dt.date.fromisoformat(v)
+        r["_제목"] = h.get("제목") or ""
+        r["_idx"] = h.get("잡알리오idx") or ""
+        r["_상세URL"] = h.get("관련서류") or ""
+        r["비고"] = re.sub(r"🔵[^/]*/\s*", "", r.get("비고") or "")   # 교사용 표시는 뺀다
+        rows.append(r)
+
+    rows.sort(key=lambda r: (str(r.get("접수마감") or "9999"), r.get("기관명") or ""))
+    write_report(rows, os.path.join(DOCS_DIR, "index.html"), today,
+                 len(rows), None, None, mode="open")
+    log("첫 화면: 모집중 %d건 (docs/index.html)" % len(rows))
+
+
+def finish(rows, dropped, failed, all_ids, seen_idx, today, run_dir, n_new):
+    """두 수집 경로(오픈API·스크래핑)가 공유하는 마무리 — 저장·리포트·이력."""
+    # 핵심 계열을 위로, 그 안에서 마감 임박순
+    downloads = []
+    rows.sort(key=lambda r: (0 if set(r["직렬태그"].split(";")) & CORE_TAGS else 1,
+                             r["접수마감"] or "9999", r["기관명"]))
+    n_core = sum(1 for r in rows if set(r["직렬태그"].split(";")) & CORE_TAGS)
+    log("핵심계열 %d건 / 사무 %d건 / 제외 %d건" % (n_core, len(rows) - n_core, dropped))
+
+    if rows:
+        xlsx = unique_path(os.path.join(run_dir, "주간수집_%s.xlsx" % today))
+        write_xlsx(rows, xlsx)
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(COLS)
+        for r in rows:
+            w.writerow([r.get(c, "") for c in COLS])
+        csvp = unique_path(os.path.join(run_dir, "주간수집_%s.csv" % today))
+        csvp = save_text(csvp, buf.getvalue(), encoding="utf-8-sig")
+        txt = unique_path(os.path.join(run_dir, "구글시트_붙여넣기_%s.txt" % today))
+        save_text(txt, tsv_of(rows))
+        if xlsx:
+            downloads.append(("엑셀 내려받기", "files/%s/%s" % (today, os.path.basename(xlsx))))
+        if csvp:
+            downloads.append(("CSV 내려받기", "files/%s/%s" % (today, os.path.basename(csvp))))
+        log("저장: docs/files/%s/%s" % (today, os.path.basename(xlsx or "")))
+
+    # 누적 이력 — 주간 파일과 별개로, 지금까지 모은 것이 한 파일에 계속 쌓인다
+    hist = load_history()
+    known = {h.get("잡알리오idx") for h in hist}
+    added = 0
+    for r in rows:
+        if r["_idx"] in known:
+            continue
+        h = {c: r.get(c, "") for c in COLS}
+        for c in DATE_COLS:                       # CSV에는 날짜를 글자로 적는다
+            h[c] = h[c].isoformat() if isinstance(h[c], dt.date) else (h[c] or "")
+        h["상태"] = ""                             # 수식은 이력에 넣지 않는다
+        h["잡알리오idx"] = r["_idx"]
+        h["제목"] = r.get("_제목", "")
+        hist.append(h)
+        added += 1
+    if added:
+        save_history(hist)
+    log("누적 이력: %d건 추가 / 전체 %d건" % (added, len(hist)))
+
+    # 그 주 신규는 날짜 파일로 남긴다(지우지 않는다).
+    report = unique_path(os.path.join(DOCS_DIR, "%s.html" % today))
+    write_report(rows, report, today, n_new, failed, downloads)
+    write_archive_index()
+    log("주간 리포트: docs/%s" % os.path.basename(report))
+
+    # 첫 화면은 '지금 지원할 수 있는 공고' — 언제 들어와도 쓸모 있게.
+    write_open_index(hist, today)
+
+    # 실행 흔적을 남겨 저장소가 '활동 중'으로 유지되게 한다.
+    # (깃허브는 60일간 활동이 없으면 예약 워크플로를 꺼 버린다)
+    save_text(os.path.join(DATA_DIR, "last_run.txt"),
+              "%s 실행 / 신규 %d건 / 누적 %d건\n"
+              % (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), len(rows), len(seen_idx)))
+
+    if failed:
+        log("읽지 못한 공고 %d건 — 다음 주에 다시 시도합니다: %s" % (len(failed), ", ".join(failed)))
+    seen_idx.update(k for k in all_ids if k not in set(failed))
+    with open(STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"updated": today, "seen_idx": sorted(seen_idx)}, f, ensure_ascii=False, indent=1)
+    log("완료 — 누적 %d건 기억" % len(seen_idx))
+
+    # 직접 실행했을 때는 결과 리포트를 바로 띄워 준다 (스케줄러는 조용히 지나간다)
+    if "--open" in sys.argv and os.name == "nt":
+        try:
+            os.startfile(report)
+        except OSError as e:
+            log("  리포트를 열지 못했습니다: %s" % e)
+    return 0
 
 
 def main():
@@ -900,7 +1122,6 @@ def main():
     os.makedirs(run_dir, exist_ok=True)
     log("=" * 60)
     log("수집 시작")
-    api_probe()
 
     seen = {}
     if os.path.exists(STATE_PATH):
@@ -911,6 +1132,27 @@ def main():
             log("  상태 파일을 읽지 못해 새로 시작합니다")
     seen_idx = set(seen.get("seen_idx", []))
 
+    # ── 1순위: 공공데이터 오픈API ──────────────────────────────
+    api_recs = api_fetch_all()
+    if api_recs:
+        by_id = {str(r.get("recrutPblntSn")): r for r in api_recs}
+        log("API 목록 %d건 확인, 기존 %d건" % (len(by_id), len(seen_idx)))
+        new_ids = [i for i in by_id if i not in seen_idx]
+        log("새 공고 %d건" % len(new_ids))
+
+        rows, dropped = [], 0
+        for i in new_ids:
+            row = api_row(by_id[i], today)
+            if not (set(row["직렬태그"].split(";")) & TARGET_TAGS):
+                dropped += 1
+                continue
+            rows.append(row)
+            log("  + %s | %s | %s"
+                % (row["기관명"], row["직렬태그"], row.get("_제목", "")[:40]))
+        return finish(rows, dropped, [], set(by_id), seen_idx,
+                      today, run_dir, len(new_ids))
+
+    # ── 2순위: 잡알리오 화면 스크래핑 (API 가 안 될 때) ──────────
     found = {}
     for name, q in QUERIES:
         for page in range(1, MAX_PAGES + 1):
@@ -968,76 +1210,8 @@ def main():
         rows.append(row)
         log("  + %s | %s | %s" % (row["기관명"], row["직렬태그"], row.get("_제목", "")[:40]))
 
-    # 기계·전기·전자·용접을 위로, 그 안에서 마감 임박순
-    downloads = []
-    rows.sort(key=lambda r: (0 if set(r["직렬태그"].split(";")) & CORE_TAGS else 1,
-                             r["접수마감"] or "9999", r["기관명"]))
-    n_core = sum(1 for r in rows if set(r["직렬태그"].split(";")) & CORE_TAGS)
-    log("핵심계열 %d건 / 사무 %d건 / 제외 %d건" % (n_core, len(rows) - n_core, dropped))
-
-    if rows:
-        xlsx = unique_path(os.path.join(run_dir, "주간수집_%s.xlsx" % today))
-        write_xlsx(rows, xlsx)
-        buf = io.StringIO()
-        w = csv.writer(buf)
-        w.writerow(COLS)
-        for r in rows:
-            w.writerow([r.get(c, "") for c in COLS])
-        csvp = unique_path(os.path.join(run_dir, "주간수집_%s.csv" % today))
-        csvp = save_text(csvp, buf.getvalue(), encoding="utf-8-sig")
-        txt = unique_path(os.path.join(run_dir, "구글시트_붙여넣기_%s.txt" % today))
-        save_text(txt, tsv_of(rows))
-        if xlsx:
-            downloads.append(("엑셀 내려받기", "files/%s/%s" % (today, os.path.basename(xlsx))))
-        if csvp:
-            downloads.append(("CSV 내려받기", "files/%s/%s" % (today, os.path.basename(csvp))))
-        log("저장: docs/files/%s/%s" % (today, os.path.basename(xlsx or "")))
-
-    # 누적 이력 — 주간 파일과 별개로, 지금까지 모은 것이 한 파일에 계속 쌓인다
-    hist = load_history()
-    known = {h.get("잡알리오idx") for h in hist}
-    added = 0
-    for r in rows:
-        if r["_idx"] in known:
-            continue
-        h = {c: r.get(c, "") for c in COLS}
-        for c in DATE_COLS:                       # CSV에는 날짜를 글자로 적는다
-            h[c] = h[c].isoformat() if isinstance(h[c], dt.date) else (h[c] or "")
-        h["상태"] = ""                             # 수식은 이력에 넣지 않는다
-        h["잡알리오idx"] = r["_idx"]
-        hist.append(h)
-        added += 1
-    if added:
-        save_history(hist)
-    log("누적 이력: %d건 추가 / 전체 %d건" % (added, len(hist)))
-
-    # 지난 리포트는 archive 에 그대로 남기고, 최신본만 index.html 로 복사한다.
-    report = unique_path(os.path.join(DOCS_DIR, "%s.html" % today))
-    write_report(rows, report, today, len(new_idx), failed, downloads)
-    shutil.copyfile(report, os.path.join(DOCS_DIR, "index.html"))
-    write_archive_index()
-    log("리포트: docs/%s  (docs/index.html 갱신)" % os.path.basename(report))
-
-    # 실행 흔적을 남겨 저장소가 '활동 중'으로 유지되게 한다.
-    # (깃허브는 60일간 활동이 없으면 예약 워크플로를 꺼 버린다)
-    save_text(os.path.join(DATA_DIR, "last_run.txt"),
-              "%s 실행 / 신규 %d건 / 누적 %d건\n"
-              % (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), len(rows), len(seen_idx)))
-
-    if failed:
-        log("읽지 못한 공고 %d건 — 다음 주에 다시 시도합니다: %s" % (len(failed), ", ".join(failed)))
-    seen_idx.update(k for k in found if k not in set(failed))
-    with open(STATE_PATH, "w", encoding="utf-8") as f:
-        json.dump({"updated": today, "seen_idx": sorted(seen_idx)}, f, ensure_ascii=False, indent=1)
-    log("완료 — 누적 %d건 기억" % len(seen_idx))
-
-    # 직접 실행했을 때는 결과 리포트를 바로 띄워 준다 (스케줄러는 조용히 지나간다)
-    if "--open" in sys.argv and os.name == "nt":
-        try:
-            os.startfile(report)
-        except OSError as e:
-            log("  리포트를 열지 못했습니다: %s" % e)
-    return 0
+    return finish(rows, dropped, failed, set(found), seen_idx,
+                  today, run_dir, len(new_idx))
 
 
 if __name__ == "__main__":
