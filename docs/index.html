@@ -160,7 +160,7 @@ table.sum td a:hover{text-decoration:underline}
   if(tab) tab.textContent='지금 지원 가능 '+open+'건';
   var sub=document.querySelector('.sub');
   if(sub){ var p=document.createElement('div'); p.className='asof';
-    p.innerHTML='\U0001F4C5 <b>오늘('+ymd(today)+') 기준으로 다시 계산했습니다.</b> '+
+    p.innerHTML='📅 <b>오늘('+ymd(today)+') 기준으로 다시 계산했습니다.</b> '+
       (gone? '이 중 <b>'+gone+'건은 이미 마감</b>되어 회색으로 표시했습니다. ':'')+
       '마감일·자격은 기관 공고가 기준이며, 이 표와 다를 수 있습니다.';
     sub.parentNode.insertBefore(p, sub.nextSibling); }
