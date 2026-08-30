@@ -663,9 +663,29 @@ table.sum td{border:1px solid #e5e7eb;padding:6px 8px;vertical-align:middle}
 table.sum tr.urgent{background:#fef2f2}
 table.sum td a{text-decoration:none;font-weight:700}
 table.sum td a:hover{text-decoration:underline}
+/* 열어 보는 날 기준으로 다시 계산해 마감된 것을 확실히 죽인다 */
+table.sum tr.gone{background:#f3f4f6;color:#9ca3af}
+table.sum tr.gone td{text-decoration:line-through}
+table.sum tr.gone td.st{text-decoration:none;color:#6b7280;font-weight:700}
+table.sum tr.gone a{color:#9ca3af}
+.card.gone{background:#f9fafb;border-color:#e5e7eb;opacity:.62}
+.card.gone h2{text-decoration:line-through;color:#9ca3af}
+.gonetag{display:inline-block;background:#6b7280;color:#fff;border-radius:99px;
+ padding:1px 9px;font-size:12px;font-weight:700;margin-left:6px}
+.today{display:inline-block;background:#b91c1c;color:#fff;border-radius:99px;
+ padding:1px 9px;font-size:12px;font-weight:700}
+.asof{margin:10px 0 0;font-size:12.5px;color:#374151;background:#fffbeb;
+ border:1px solid #fde68a;border-radius:8px;padding:8px 10px}
+.corner{position:fixed;right:12px;bottom:12px;z-index:9999;max-width:290px;
+ background:#111827;color:#fff;border-radius:10px;padding:9px 11px;font-size:12px;
+ line-height:1.5;box-shadow:0 6px 18px rgba(0,0,0,.28)}
+.corner b{color:#fca5a5}
 @media print{
  body{margin:0;font-size:11pt}
  .bar,#paste,.noprint,.tabs{display:none !important}
+ .corner{position:static;max-width:none;background:#fff;color:#000;border:2px solid #000;
+  margin-top:14px}
+ .corner b{color:#000}
  [hidden]{display:block !important}
  .card{break-inside:avoid;page-break-inside:avoid;border:1px solid #999}
  .warn{border:2px solid #000;background:#fff;color:#000}
@@ -736,6 +756,8 @@ table.sum td a:hover{text-decoration:underline}
             return "", False
         if left < 0:
             return "마감", False
+        if left == 0:
+            return "오늘 마감", True
         return "D-%d" % left, left <= 7
 
     ordered = core + samu
@@ -748,8 +770,9 @@ table.sum td a:hover{text-decoration:underline}
             tags = "".join("<span class='tag'>%s</span>" % esc(t) for t in r["직렬태그"].split(";"))
             label, _ = dday_of(r)
             dday = "<span class='d'>%s</span>" % esc(label) if label else ""
-            parts.append("<div class='card' id='%s'><h2>%d. %s — %s</h2>%s %s<table>" % (
-                r["_id"], r["_no"], esc(r["기관명"]), esc(r.get("_제목", "")), tags, dday))
+            parts.append("<div class='card' id='%s' data-dl='%s'><h2>%d. %s — %s</h2>%s %s<table>" % (
+                r["_id"], esc(str(r.get("접수마감") or "")),
+                r["_no"], esc(r["기관명"]), esc(r.get("_제목", "")), tags, dday))
             if r.get("학교장추천") == "필요":
                 parts.append("<tr><td class='k'>학교장추천</td>"
                              "<td class='d'>필요 — 추천 마감을 먼저 확인하세요</td></tr>")
@@ -780,17 +803,18 @@ table.sum td a:hover{text-decoration:underline}
             label, urgent = dday_of(r)
             rec = r.get("학교장추천") or ""
             parts.append(
-                "<tr%s><td>%d</td>"
+                "<tr%s data-dl='%s'><td>%d</td>"
                 "<td><a href='#%s'>%s</a></td>"
-                "<td>%s</td><td>%s</td><td%s>%s</td><td>%s</td><td%s>%s</td></tr>"
+                "<td>%s</td><td>%s</td><td%s>%s</td><td>%s</td><td class='st%s'>%s</td></tr>"
                 % (" class='urgent'" if urgent else "",
+                   esc(str(r.get("접수마감") or "")),
                    r["_no"], r["_id"], esc(r["기관명"]),
                    esc(r["직렬태그"].replace(";", " · ")),
                    esc(r.get("대상") or ""),
                    " class='d'" if rec == "필요" else "",
                    ("🔴 필요" if rec == "필요" else esc(rec)),
                    esc(str(r.get("접수마감") or "")),
-                   " class='d'" if (urgent or label == "마감") else "",
+                   " d" if (urgent or label == "마감") else "",
                    esc(label)))
         parts.append("</table>")
 
@@ -833,6 +857,50 @@ table.sum td a:hover{text-decoration:underline}
                      "document.getElementById('tab-closed').hidden=(k!=='closed');"
                      "document.querySelectorAll('.tabs button').forEach(function(x){"
                      "x.classList.remove('on')});b.classList.add('on');}</script>")
+        # 이 페이지는 주 1회만 다시 만들어진다. 만든 날 박아 둔 D-day 를 그대로 두면
+        # 며칠 뒤에 열었을 때 이미 마감된 공고가 «지금 지원 가능»으로 남는다.
+        # 그래서 열어 보는 날 기준으로 브라우저에서 다시 계산한다.
+        parts.append(r"""<script>
+(function(){
+  function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  var now=new Date(); var today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  function left(v){ if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+    var p=v.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
+    return Math.round((d-today)/86400000); }
+  var gone=0, open=0;
+  document.querySelectorAll('tr[data-dl]').forEach(function(tr){
+    var n=left(tr.getAttribute('data-dl')); var cell=tr.querySelector('td.st'); if(n===null){return;}
+    if(n<0){ gone++; tr.classList.add('gone'); tr.classList.remove('urgent');
+      if(cell){cell.textContent=''; var b=document.createElement('span'); b.className='gonetag';
+        b.textContent='마감됨'; cell.appendChild(b);} }
+    else { open++;
+      if(cell){ cell.textContent=''; if(n===0){ var t=document.createElement('span');
+          t.className='today'; t.textContent='오늘 마감'; cell.appendChild(t); }
+        else { cell.textContent='D-'+n; } }
+      if(n<=7) tr.classList.add('urgent'); else tr.classList.remove('urgent'); }
+  });
+  document.querySelectorAll('.card[data-dl]').forEach(function(c){
+    var n=left(c.getAttribute('data-dl')); if(n===null) return;
+    var d=c.querySelector('.d');
+    if(n<0){ c.classList.add('gone');
+      if(d){ d.textContent=''; var b=document.createElement('span'); b.className='gonetag';
+        b.textContent='마감됨 — 지금은 지원할 수 없습니다'; d.appendChild(b); } }
+    else if(d){ d.textContent = (n===0? '오늘 마감' : 'D-'+n); }
+  });
+  var tab=document.querySelector('.tabs button');
+  if(tab) tab.textContent='지금 지원 가능 '+open+'건';
+  var sub=document.querySelector('.sub');
+  if(sub){ var p=document.createElement('div'); p.className='asof';
+    p.innerHTML='📅 <b>오늘('+ymd(today)+') 기준으로 다시 계산했습니다.</b> '+
+      (gone? '이 중 <b>'+gone+'건은 이미 마감</b>되어 회색으로 표시했습니다. ':'')+
+      '마감일·자격은 기관 공고가 기준이며, 이 표와 다를 수 있습니다.';
+    sub.parentNode.insertBefore(p, sub.nextSibling); }
+})();
+</script>""")
+        parts.append("<div class='corner'>⚠️ <b>참고용입니다.</b> 마감일·자격요건은 "
+                     "기관 공고가 기준이며 이 표와 다를 수 있습니다. "
+                     "지원 전 <b>반드시 원문 공고에서 직접 확인</b>하세요. "
+                     "이 페이지의 내용으로 생긴 일에 대해서는 <b>책임지지 않습니다.</b></div>")
 
     if rows and mode != "open":
         parts.append(
