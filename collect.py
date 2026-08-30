@@ -686,7 +686,7 @@ table.sum td a:hover{text-decoration:underline}
         sub = ("%s · 새로 올라온 고졸·신입 공고 %d건을 확인해 "
                "<b>%s %d건</b>, 사무 %d건을 찾았습니다."
                % (today, scanned, CORE_LABEL, len(core), len(samu)))
-    parts = ["<meta charset='utf-8'><title>%s</title><style>%s</style>" % (head, css)]
+    parts = ["<meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>%s</title><style>%s</style>" % (head, css)]
     parts.append("<h1>%s</h1>" % head)
     parts.append("<div class='sub'>%s</div>" % sub)
 
@@ -880,7 +880,7 @@ def write_archive_index():
         "<li><a href='%s'>%s</a></li>" % (html.escape(n), html.escape(n[:-5]))
         for n in names)
     page = (
-        "<meta charset='utf-8'><title>지난 주차 모아보기</title>"
+        "<meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>지난 주차 모아보기</title>"
         "<style>body{font-family:'Malgun Gothic',sans-serif;margin:28px;color:#111}"
         "h1{font-size:19px}ul{line-height:2;padding-left:18px}a{color:#1d4ed8}"
         ".back{display:inline-block;margin-bottom:14px}</style>"
