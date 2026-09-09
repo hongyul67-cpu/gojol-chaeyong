@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-잡알리오(공공기관 채용정보시스템) 고졸 채용공고 주 1회 수집기
+잡알리오(공공기관 채용정보시스템) 고졸 채용공고 매일 수집기
 
 하는 일
   1. 잡알리오에서 '고졸 + 신입' 공고 목록을 가져온다
@@ -623,8 +623,14 @@ def tsv_of(rows):
     return "\n".join(lines)
 
 
+def run_stamp():
+    """화면에 적을 갱신 시각. 깃허브 서버는 UTC 라서, 워크플로가 넣어 주는
+    TZ=Asia/Seoul 이 있어야 한국시간으로 찍힌다."""
+    return dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
 def write_report(rows, path, today, scanned, failed=None, downloads=None,
-                 mode="weekly", closed=None):
+                 mode="weekly", closed=None, updated=None):
     esc = lambda s: html.escape(str(s or ""))
     css = """body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;margin:24px;color:#111;background:#fff}
 h1{font-size:20px;margin:0 0 4px}.sub{color:#666;font-size:13px;margin-bottom:14px}
@@ -674,6 +680,9 @@ table.sum tr.gone a{color:#9ca3af}
  padding:1px 9px;font-size:12px;font-weight:700;margin-left:6px}
 .today{display:inline-block;background:#b91c1c;color:#fff;border-radius:99px;
  padding:1px 9px;font-size:12px;font-weight:700}
+.updated{display:inline-block;margin:0 0 14px;font-size:13px;color:#065f46;
+ background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:7px 11px}
+.updated b{font-variant-numeric:tabular-nums;color:#064e3b}
 .asof{margin:10px 0 0;font-size:12.5px;color:#374151;background:#fffbeb;
  border:1px solid #fde68a;border-radius:8px;padding:8px 10px}
 .corner{position:fixed;right:12px;bottom:12px;z-index:9999;max-width:290px;
@@ -699,16 +708,19 @@ table.sum tr.gone a{color:#9ca3af}
         head = "지금 지원할 수 있는 공고"
         sub = ("%s 기준으로 <b>접수가 끝나지 않은 공고 %d건</b>입니다. "
                "마감이 가까운 순서로 놓았습니다.<br>"
-               "매주 월요일 아침에 저절로 새로 고쳐집니다 — 이 주소만 기억해 두세요."
+               "매일 아침 9시에 저절로 새로 고쳐집니다 — 이 주소만 기억해 두세요."
                % (today, len(rows)))
     else:
-        head = "이번 주 새로 올라온 공고"
-        sub = ("%s · 새로 올라온 고졸·신입 공고 %d건을 확인해 "
+        head = "%s 새로 올라온 공고" % today
+        sub = ("새로 올라온 고졸·신입 공고 %d건을 확인해 "
                "<b>%s %d건</b>, 사무 %d건을 찾았습니다."
-               % (today, scanned, CORE_LABEL, len(core), len(samu)))
+               % (scanned, CORE_LABEL, len(core), len(samu)))
     parts = ["<meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>%s</title><style>%s</style>" % (head, css)]
     parts.append("<h1>%s</h1>" % head)
     parts.append("<div class='sub'>%s</div>" % sub)
+    parts.append("<div class='updated'>🕒 마지막 갱신 <b>%s</b> (한국시간) · "
+                 "매일 아침 9시 전에 저절로 새로 고쳐집니다</div>"
+                 % esc(updated or run_stamp()))
 
     if mode == "open":
         # 학생·학부모가 보는 화면
@@ -739,12 +751,12 @@ table.sum tr.gone a{color:#9ca3af}
         bar.append("<a class='btnlink' href='%s' download>⬇ %s</a>"
                    % (esc(href), esc(label)))
     arc = (SITE_URL + "archive.html") if mode == "open" else "archive.html"
-    bar.append("<a class='btnlink' href='%s'>📁 지난 주차 보기</a>" % arc)
+    bar.append("<a class='btnlink' href='%s'>📁 지난 수집 보기</a>" % arc)
     bar.append("</div>")
     parts.append("".join(bar))
 
     if not rows:
-        parts.append("<div class='none'>이번 주 새로 올라온 관련 공고가 없습니다.</div>")
+        parts.append("<div class='none'>새로 올라온 관련 공고가 없습니다.</div>")
 
     def dday_of(r):
         """(표시할 글자, 급한가) — 접수마감이 없으면 빈 값."""
@@ -941,19 +953,19 @@ function copyTsv(){
 
 
 def write_archive_index():
-    """지난 주차 리포트를 날짜순으로 모아 보여주는 목록 페이지."""
+    """지난 리포트를 날짜순으로 모아 보여주는 목록 페이지."""
     names = sorted((f for f in os.listdir(DOCS_DIR)
                     if re.match(r"^\d{4}-\d{2}-\d{2}.*\.html$", f)), reverse=True)
     items = "\n".join(
         "<li><a href='%s'>%s</a></li>" % (html.escape(n), html.escape(n[:-5]))
         for n in names)
     page = (
-        "<meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>지난 주차 모아보기</title>"
+        "<meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>지난 수집 모아보기</title>"
         "<style>body{font-family:'Malgun Gothic',sans-serif;margin:28px;color:#111}"
         "h1{font-size:19px}ul{line-height:2;padding-left:18px}a{color:#1d4ed8}"
         ".back{display:inline-block;margin-bottom:14px}</style>"
-        "<a class='back' href='index.html'>← 이번 주 보기</a>"
-        "<h1>지난 주차 모아보기</h1><ul>%s</ul>" % (items or "<li>아직 없습니다.</li>"))
+        "<a class='back' href='index.html'>← 지금 지원할 수 있는 공고</a>"
+        "<h1>지난 수집 모아보기</h1><ul>%s</ul>" % (items or "<li>아직 없습니다.</li>"))
     save_text(os.path.join(DOCS_DIR, "archive.html"), page)
 
 
@@ -1153,7 +1165,7 @@ def api_row(rec, today):
 
 
 def prune_old(today):
-    """1년 지난 주차 리포트와 자료 폴더를 지운다."""
+    """1년 지난 날짜별 리포트와 자료 폴더를 지운다."""
     limit = (dt.date.fromisoformat(today) - dt.timedelta(days=KEEP_DAYS)).isoformat()
     gone = []
     for f in sorted(os.listdir(DOCS_DIR)):
@@ -1189,11 +1201,11 @@ def prune_history(hist, today):
     return kept
 
 
-def write_open_index(hist, today):
+def write_open_index(hist, today, updated=None):
     """누적 이력에서 아직 접수 중인 공고만 골라 첫 화면을 만든다.
 
-    주간 리포트는 '이번 주에 새로 뜬 것'이라, 수요일에 들어온 학생에게는
-    지난주에 뜬 진행중 공고가 안 보인다. 상설 링크로 쓰려면 이 화면이 맞다.
+    날짜별 리포트는 '그날 새로 뜬 것'이라, 오늘 들어온 학생에게는
+    어제까지 뜬 진행중 공고가 안 보인다. 상설 링크로 쓰려면 이 화면이 맞다.
     """
     month_ago = (dt.date.fromisoformat(today) - dt.timedelta(days=30)).isoformat()
     rows, closed = [], []
@@ -1217,12 +1229,14 @@ def write_open_index(hist, today):
     rows.sort(key=lambda r: (str(r.get("접수마감") or "9999"), r.get("기관명") or ""))
     closed.sort(key=lambda r: str(r.get("접수마감") or ""), reverse=True)
     write_report(rows, os.path.join(DOCS_DIR, "index.html"), today,
-                 len(rows), None, None, mode="open", closed=closed)
+                 len(rows), None, None, mode="open", closed=closed, updated=updated)
     log("첫 화면: 모집중 %d건 / 최근 마감 %d건 (docs/index.html)" % (len(rows), len(closed)))
 
 
 def finish(rows, dropped, failed, all_ids, seen_idx, today, run_dir, n_new):
     """두 수집 경로(오픈API·스크래핑)가 공유하는 마무리 — 저장·리포트·이력."""
+    # 갱신 시각은 여기서 한 번만 잰다. 화면마다 따로 재면 몇 초씩 어긋난다.
+    stamp = run_stamp()
     # 핵심 계열을 위로, 그 안에서 마감 임박순
     downloads = []
     rows.sort(key=lambda r: (0 if set(r["직렬태그"].split(";")) & CORE_TAGS else 1,
@@ -1231,14 +1245,14 @@ def finish(rows, dropped, failed, all_ids, seen_idx, today, run_dir, n_new):
     log("핵심계열 %d건 / 사무 %d건 / 제외 %d건" % (n_core, len(rows) - n_core, dropped))
 
     if rows:
-        xlsx = unique_path(os.path.join(run_dir, "주간수집_%s.xlsx" % today))
+        xlsx = unique_path(os.path.join(run_dir, "수집_%s.xlsx" % today))
         write_xlsx(rows, xlsx)
         buf = io.StringIO()
         w = csv.writer(buf)
         w.writerow(COLS)
         for r in rows:
             w.writerow([r.get(c, "") for c in COLS])
-        csvp = unique_path(os.path.join(run_dir, "주간수집_%s.csv" % today))
+        csvp = unique_path(os.path.join(run_dir, "수집_%s.csv" % today))
         csvp = save_text(csvp, buf.getvalue(), encoding="utf-8-sig")
         txt = unique_path(os.path.join(run_dir, "구글시트_붙여넣기_%s.txt" % today))
         save_text(txt, tsv_of(rows))
@@ -1248,7 +1262,7 @@ def finish(rows, dropped, failed, all_ids, seen_idx, today, run_dir, n_new):
             downloads.append(("CSV 내려받기", "files/%s/%s" % (today, os.path.basename(csvp))))
         log("저장: docs/files/%s/%s" % (today, os.path.basename(xlsx or "")))
 
-    # 누적 이력 — 주간 파일과 별개로, 지금까지 모은 것이 한 파일에 계속 쌓인다
+    # 누적 이력 — 날짜별 파일과 별개로, 지금까지 모은 것이 한 파일에 계속 쌓인다
     hist = load_history()
     known = {h.get("잡알리오idx") for h in hist}
     added = 0
@@ -1268,31 +1282,39 @@ def finish(rows, dropped, failed, all_ids, seen_idx, today, run_dir, n_new):
         save_history(hist)
     log("누적 이력: %d건 추가 / 전체 %d건" % (added, len(hist)))
 
-    # 그 주 신규는 날짜 파일로 남긴다(지우지 않는다).
-    report = unique_path(os.path.join(DOCS_DIR, "%s.html" % today))
-    write_report(rows, report, today, n_new, failed, downloads)
+    # 새로 뜬 공고가 있는 날만 날짜 파일로 남긴다(남긴 것은 지우지 않는다).
+    # 매일 돌리면 대부분의 날은 신규가 0건이라, 빈 리포트까지 남기면
+    # '지난 수집' 목록이 빈 껍데기로만 가득 찬다.
+    report = None
+    if rows:
+        report = unique_path(os.path.join(DOCS_DIR, "%s.html" % today))
+        write_report(rows, report, today, n_new, failed, downloads, updated=stamp)
+        log("오늘 리포트: docs/%s" % os.path.basename(report))
+    else:
+        log("새 공고가 없어 날짜 리포트는 만들지 않습니다 (첫 화면만 갱신)")
     prune_old(today)
     write_archive_index()
-    log("주간 리포트: docs/%s" % os.path.basename(report))
 
     # 첫 화면은 '지금 지원할 수 있는 공고' — 언제 들어와도 쓸모 있게.
-    write_open_index(hist, today)
+    # 신규가 0건인 날에도 다시 만든다. 마감이 하루씩 다가오고,
+    # 어제까지 열려 있던 공고가 오늘 닫히기 때문이다.
+    write_open_index(hist, today, stamp)
+
+    if failed:
+        log("읽지 못한 공고 %d건 — 다음 실행에 다시 시도합니다: %s" % (len(failed), ", ".join(failed)))
+    seen_idx.update(k for k in all_ids if k not in set(failed))
 
     # 실행 흔적을 남겨 저장소가 '활동 중'으로 유지되게 한다.
     # (깃허브는 60일간 활동이 없으면 예약 워크플로를 꺼 버린다)
+    # seen_idx 를 갱신한 뒤에 적는다 — 전에는 갱신 전 숫자가 적혀 로그와 어긋났다.
     save_text(os.path.join(DATA_DIR, "last_run.txt"),
-              "%s 실행 / 신규 %d건 / 누적 %d건\n"
-              % (dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), len(rows), len(seen_idx)))
-
-    if failed:
-        log("읽지 못한 공고 %d건 — 다음 주에 다시 시도합니다: %s" % (len(failed), ", ".join(failed)))
-    seen_idx.update(k for k in all_ids if k not in set(failed))
+              "%s 실행 / 신규 %d건 / 누적 %d건\n" % (stamp, len(rows), len(seen_idx)))
     with open(STATE_PATH, "w", encoding="utf-8") as f:
         json.dump({"updated": today, "seen_idx": sorted(seen_idx)}, f, ensure_ascii=False, indent=1)
     log("완료 — 누적 %d건 기억" % len(seen_idx))
 
     # 직접 실행했을 때는 결과 리포트를 바로 띄워 준다 (스케줄러는 조용히 지나간다)
-    if "--open" in sys.argv and os.name == "nt":
+    if "--open" in sys.argv and os.name == "nt" and report:
         try:
             os.startfile(report)
         except OSError as e:
