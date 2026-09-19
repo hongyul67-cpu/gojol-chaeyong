@@ -745,8 +745,11 @@ table.sum tr.gone a{color:#9ca3af}
             "추천 마감이 원서접수보다 한 달 넘게 앞서는 경우가 있습니다.</div>")
 
     bar = ["<div class='bar'>",
-           "<button onclick='window.print()'>🖨 인쇄 / PDF로 저장</button>",
-           "<button class='ghost' onclick='copyTsv()'>📋 구글시트용으로 복사</button>"]
+           "<button onclick='window.print()'>🖨 인쇄 / PDF로 저장</button>"]
+    # 복사할 표(#tsv)와 copyTsv() 는 선생님용 주간 보고에만 넣는다(아래 mode != "open").
+    # 학생용 화면에 단추만 있으면 눌렀을 때 'copyTsv is not defined' 오류가 난다.
+    if mode != "open":
+        bar.append("<button class='ghost' onclick='copyTsv()'>📋 구글시트용으로 복사</button>")
     for label, href in (downloads or []):
         bar.append("<a class='btnlink' href='%s' download>⬇ %s</a>"
                    % (esc(href), esc(label)))
